@@ -3,4 +3,4 @@ mmfe8/
 vivado.*
 *.jou
 *.log
-
+*.pyc
