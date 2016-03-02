@@ -427,9 +427,8 @@ set_property "top" "toplevel" $obj
 
 # Create 'synth_1' run (if not found)
 if {[string equal [get_runs -quiet synth_1] ""]} {
-  create_run -name synth_1 -part xc7a200tfbg484-2 -flow {Vivado Synthesis 2014} -strategy "My test" -constrset constrs_1
+  create_run -name synth_1 -part xc7a200tfbg484-2 -flow {Vivado Synthesis 2014} -constrset constrs_1
 } else {
-  set_property strategy "My test" [get_runs synth_1]
   set_property flow "Vivado Synthesis 2014" [get_runs synth_1]
 }
 set obj [get_runs synth_1]
