@@ -53,6 +53,11 @@ class udp_stuff:
         sock = socket.socket(socket.AF_INET, # Internet
              socket.SOCK_DGRAM) # UDP 
         sock.settimeout(5)
+
+        MESSAGE = MESSAGE.replace("\0", "")
+        MESSAGE = MESSAGE.replace("\n", "")
+        MESSAGE += "\0\n"
+
         try:
             #send data
             print >>sys.stderr, 'sending "%s"' % MESSAGE
