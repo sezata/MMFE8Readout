@@ -4,7 +4,7 @@ This based on the *X-4b2h-XADC* version from Arizona.
 
 Building the entire project from scratch is currently not guaranteed to work. This is in progress.
 
-To run the build tcl script, do:
+To try the build tcl script anyway, do:
 
     vivado -mode batch -source build.tcl
 
