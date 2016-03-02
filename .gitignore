@@ -1,6 +1,13 @@
 mmfe8/
 .Xil/
-vivado.*
+vivado*
 *.jou
 *.log
 *.pyc
+sdk/RemoteSystemsTempFiles/
+sdk/toplevel.bit
+sdk/toplevel.hdf
+sdk/toplevel_hw_platform_0/
+sdk/udp_regs/Debug/
+sdk/webtalk/
+sdk/.metadata/
