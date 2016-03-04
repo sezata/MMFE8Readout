@@ -739,8 +739,13 @@ architecture STRUCTURE of toplevel is
     signal clk_bc_period_cnt    : std_logic_vector(15 downto 0) := x"0004";
     signal clk_bc_dutycycle_cnt : std_logic_vector(15 downto 0) := x"0002";
     -- kjohns changed these from 1F3F (7999) and 0F9F (3999) to 3e80 (16000) and 1f40 (8000)
-    signal clk_tp_period_cnt    : std_logic_vector(15 downto 0) := x"3E80";
-    signal clk_tp_dutycycle_cnt : std_logic_vector(15 downto 0) := x"0200";
+--    signal clk_tp_period_cnt    : std_logic_vector(15 downto 0) := x"3E80";
+--    signal clk_tp_dutycycle_cnt : std_logic_vector(15 downto 0) := x"0200";
+    -- ann changed these test pulse periods
+    signal clk_tp_period_cnt    : std_logic_vector(19 downto 0) := x"F4240";
+--1 kHz
+    signal clk_tp_dutycycle_cnt : std_logic_vector(19 downto 0) := x"61A80";
+    -- 400 microseconds
 
     signal counter_for_cktp_done : std_logic_vector(15 downto 0) := x"0000";
     signal cktp_done             : std_logic                     := '0';
@@ -787,11 +792,14 @@ architecture STRUCTURE of toplevel is
     signal vmm_cktp_sync : std_logic;
     signal vmm_cktp_r    : std_logic;
     signal clk_tp_X      : std_logic;
-    signal clk_tp_enable : std_logic;
     signal clk_tp_sync   : std_logic;
-    signal clk_tp_cntr   : std_logic_vector (15 downto 0) := (others => '0');
+    signal clk_tp_cntr   : std_logic_vector (19 downto 0) := (others => '0');
     signal clk_tp_out    : std_logic;
 
+    signal delay_count   : std_logic_vector (19 downto 0) := (others => '0');
+    signal delay_counter : std_logic_vector (19 downto 0) := (others => '0');
+    signal rise_counter  : std_logic_vector (15 downto 0) := x"0000";    
+    
     signal vmm_ckbc           : std_logic;
     signal vmm_ckbc_en        : std_logic;
     signal reset_bcid_counter : std_logic;
@@ -876,6 +884,10 @@ architecture STRUCTURE of toplevel is
 
     signal xxxx      : std_logic;
     signal reset_new : std_logic;
+    -- added for detecting edge
+    signal reset_new_d : std_logic;
+    signal reset_new_edge : std_logic;
+
     signal reset_old : std_logic;
 
 
@@ -1323,7 +1335,17 @@ begin
     reset <= vmm_global_reset2;
 --reset <= vmm_global_reset2 or system_init;
 
+    
+  sys_reset_edge_detect : process(reset_new)
+    -- detects falling edge of system reset
+  begin
+    if falling_edge(reset_new) then
+      reset_new_edge <= '1';
+    end if;
+  end process sys_reset_edge_detect;
 
+    
+    
 
 -- Clock instances here   
 
@@ -1392,38 +1414,57 @@ begin
 -- bill was using barrel shifter at 200MHz for this, to use minimum pulse width, synchronized to clock edge
 -- easily changed by writing any desired pattern to barral shifter 
 
-   --ann
-    edge_detect : process(clk_50, int_trig, int_trig_d)
+-- implemented CKTP synchronization with CKBC, set by variable called
+-- delay_count which is axi register 78 (values of 0, 1, 2, 3, 4 corresponding
+-- to multiples of 5 ns) --ann
+    
+    U_cktp_gen : process(clk_200, reset, delay_count)
     begin
-      if rising_edge(clk_50) then
-        int_trig_d <= int_trig;
-      end if;
-      int_trig_edge <= ((not int_trig_d) and int_trig);
-    end process edge_detect;
-
-    U_cktp_gen : process(clk_100, reset)
-    begin
-        if rising_edge(clk_100) then
+        if rising_edge(clk_200) then
             if (int_trig_edge = '1' or  reset = '1') then
-            --if reset = '1' then reset = '1'
-                clk_tp_cntr <= clk_tp_period_cnt;
-                clk_tp_out  <= '0';
-                cktp_done   <= '0';
+              if clk_bc_out = '1' then  --sync with CKBC
+                rise_counter <= rise_counter + '1';
+                if to_integer(unsigned(rise_counter)) = 1 then
+                clk_tp_cntr  <= clk_tp_period_cnt;
+                clk_tp_out   <= '0';
+                cktp_done    <= '0';
+                rise_counter <= (others => '0');                  
+                end if;
+              elsif clk_bc_out = '0' then     --want this to reset every cycle
+                rise_counter <= (others => '0');
+              end if;
             else
-
-                
                 if(((busy_from_ext_trigger = '1') and (int_trig = '0'))
                    or ((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1'))))    then  -- vmm_cktp_en currently hardwired to '1'
-      --                if( int_trig = '1')  then  -- test
-                    if clk_tp_cntr = clk_tp_period_cnt then
-                        clk_tp_cntr <= (others => '0');
-                        clk_tp_out  <= '1';
-                    else
-                        clk_tp_cntr <= clk_tp_cntr + '1';
-                        if clk_tp_cntr = clk_tp_dutycycle_cnt then
-                            clk_tp_out <= '0';
-                        end if;
+                  if clk_tp_cntr = clk_tp_period_cnt then
+                     if clk_bc_out = '0' and clk_tp_out = '0' then
+                       if delay_counter = delay_count then
+                         clk_tp_out  <= '1';
+                         clk_tp_cntr <= delay_count + '1';
+                       else
+                         delay_counter <= delay_counter + '1';
+                       end if;
+                     elsif to_integer(unsigned(delay_counter)) /= 0 and clk_tp_out = '0' then
+                       if delay_counter = delay_count then
+                         clk_tp_out  <= '1';
+                         clk_tp_cntr <= delay_count + '1';
+                       else
+                         delay_counter <= delay_counter + '1';
+                       end if;
+                     end if;
+                  else
+                    clk_tp_cntr <= clk_tp_cntr + '1';
+                    if clk_tp_cntr = clk_tp_dutycycle_cnt then
+                      clk_tp_out    <= '0';
+                      delay_counter <= (others => '0');
                     end if;
+                  end if;
+                elsif cktp_done = '1' then
+                  clk_tp_cntr <= clk_tp_cntr + '1';
+                  if clk_tp_cntr = clk_tp_dutycycle_cnt then
+                    clk_tp_out    <= '0';
+                    delay_counter <= (others =>  '0');
+                  end if;
                 end if;
 
                 if pulses = x"03e7" then  -- x"03e7" <=> 999 
@@ -1437,10 +1478,9 @@ begin
         end if;
     end process U_cktp_gen;
 
-    U_cktp_done : process (clk_tp_out, reset)
+    U_cktp_done : process (clk_tp_out, reset, int_trig_edge)
     begin
         if (int_trig_edge = '1' or  reset = '1') then
-        --if reset = '1' then
             counter_for_cktp_done <= (others => '0');
         else
             if rising_edge(clk_tp_out) then
@@ -1449,6 +1489,15 @@ begin
         end if;
     end process U_cktp_done;
 
+
+
+    edge_detect : process(clk_bc_out, int_trig, int_trig_d)
+    begin
+      if rising_edge(clk_bc_out) then
+        int_trig_d <= int_trig;
+      end if;
+      int_trig_edge <= ((not int_trig_d) and int_trig);
+    end process edge_detect;
 
 
     Ext_trig_sim : process(clk_100, reset)
@@ -2349,7 +2398,7 @@ begin
 
 
     process(clk_200, vmm_cfg_en_vec, vmm_cktk_daq_en_vec, vmm_cktk_cfg_sr_en,
-            vmm_ena_vmm_cfg_sm_vec, vmm_ena_cfg_rst, vmm_ena_cfg_sr, vmm_wen_cfg_sr, vmm_wen_cfg_rst)
+            vmm_ena_vmm_cfg_sm_vec, vmm_ena_cfg_rst, vmm_ena_cfg_sr, vmm_wen_cfg_sr, vmm_wen_cfg_rst, reset_new_edge)
 
     begin
         if(rising_edge(clk_200)) then
@@ -2363,9 +2412,9 @@ begin
                 else
                     vmm_di_en_vec(I)   <= '0';
                     vmm_cktk_en_vec(I) <= vmm_cktk_daq_en_vec(I);
---              vmm_ena_vmm_cfg_sm_vec( I) <= vmm_ena_vmm_cfg_sm;
                     vmm_wen_vec(I)     <= vmm_wen_acq_rst(I);
-                    vmm_ena_vec(I)     <= vmm_ena_acq_rst(I) or (vmm_ena_vmm_cfg_sm_vec(I) and (not vmm_acq_rst_running(I)));
+                    --changed to set ENA high after a sys rst
+                    vmm_ena_vec(I)     <= vmm_ena_acq_rst(I) or (reset_new_edge and (not vmm_acq_rst_running(I))) or (vmm_ena_vmm_cfg_sm_vec(I) and (not vmm_acq_rst_running(I)));
                 end if;
             end loop;
 
@@ -2652,6 +2701,8 @@ begin
     acq_rst_term_count      <= axi_reg(68)(31 downto 0);
     acq_rst_hold_term_count <= axi_reg(69)(31 downto 0);
 --      := x"00080000"; -- 40 @ 40MHz @ 200MHz
+
+      delay_count             <= axi_reg(78)(19 downto 0);
 
 
 --    axi_reg( 66)( 31 downto 0)        <= DS2411_low( 31 downto 0);

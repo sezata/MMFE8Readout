@@ -159,6 +159,15 @@ class MMFE8:
         #sleep(5)
         #self.daq_readOut()
         return
+
+    def glob_DC_value(self, widget):
+        active = widget.get_active()
+        if active < 0:
+            return None
+        else:
+            DC = active
+            MSGsend1 = "W 0x44A10148 {0:02x} \0\n".format(DC)
+            self.udp.udp_client(MSGsend1,self.UDP_IP,self.UDP_PORT)
                
 
     def read_reg(self,widget):
@@ -273,22 +282,26 @@ class MMFE8:
                     n=n+2
                 else:
                     print "out of order or no data ="# + str(hex(dataList[n]))
-                    # n= n+1       
-                    n=n+2 # paolo
+                    #n= n+1       
+                    n=n+2 #paolo
 					
 					
     def read_xadc(self, widget):
-        msg = "x \0 \n"
-        for i in range(100):
-            myXADC = self.udp.udp_client(msg,self.UDP_IP,self.UDP_PORT)
-            pd = []
-            n = 1
-            while n<9:
-                xadcList = myXADC.split()
-                thing1 = int(xadcList[n],16)
-                thing2 = (thing1 * 1.0)/4096.0
-                pd.append(thing2)
-                n = n+1
+        #msg = "w 0x44A10058 1 \0 \n"
+        self.udp.udp_client(msg,self.UDP_IP,self.UDP_PORT)
+        msg = "x \0 \n"  # command to command_handler to send xadc
+        # 1. request pdo from microblaze
+        myXADC = self.udp.udp_client(msg,self.UDP_IP,self.UDP_PORT) 
+        # 2. create an empty list
+        pd = [] 
+        n = 1
+        while n<9:
+            
+            xadcList = myXADC.split()
+            thing1 = int(xadcList[n],16)
+            thing2 = (thing1 * 1.0)/4096.0
+            pd.append(thing2)
+            n = n+1
             print 'XADC = {0:.4f} {1:.4f} {2:.4f} {3:.4f} {4:.4f} {5:.4f} {6:.4f} {7:.4f}'.format(pd[0],pd[1],pd[2],pd[3],pd[4],pd[5],pd[6],pd[7]) 
             s = '{0:.4f}\t{1:.4f}\t{2:.4f}\t{3:.4f}\t{4:.4f}\t{5:.4f}\t{6:.4f}\t{7:.4f}\n'.format(pd[0],pd[1],pd[2],pd[3],pd[4],pd[5],pd[6],pd[7])
             with open('mmfe8-xadc.dat', 'a') as myfile:
@@ -894,6 +907,23 @@ class MMFE8:
         self.label_pulses2.set_markup('<span color="purple"><b>999 == Continuous</b></span>')
         self.label_pulses2.set_justify(gtk.JUSTIFY_CENTER)
 
+        self.label_Var_DC = gtk.Label("Delay Counts")
+        self.label_Var_DC.set_markup('<span color="blue"><b> Delay Counts   </b></span>')
+        self.combo_DC = gtk.combo_box_new_text()
+        self.combo_DC.set_active(0)
+        self.combo_DC.connect("changed",self.glob_DC_value)
+        self.combo_DC.append_text("0")
+        self.combo_DC.append_text("1")
+        self.combo_DC.append_text("2")
+        self.combo_DC.append_text("3")
+        self.combo_DC.append_text("4")
+#        self.combo_DC.set_active(0)
+        self.label_DC = gtk.Label(" st")
+        self.box_DC = gtk.HBox()
+        self.box_DC.pack_start(self.label_Var_DC, expand=False)
+        self.box_DC.pack_start(self.combo_DC, expand=False)
+        self.box_DC.pack_start(self.label_DC, expand=False)
+
 
         self.label_acq_reset_count = gtk.Label("acq_rst_count")
         self.label_acq_reset_count.set_markup('<span color="blue"><b>acq_reset_count:</b></span>')
@@ -1243,6 +1273,7 @@ class MMFE8:
         self.box_buttons.pack_start(self.box_external_trigger,expand=False)
         self.box_buttons.pack_start(self.box_leaky_readout,expand=False)
         self.box_buttons.pack_start(self.box_pulses,expand=False)        
+        self.box_buttons.pack_start(self.box_DC,expand=False)        
         self.box_buttons.pack_start(self.label_pulses2,expand=False)
         self.box_buttons.pack_start(self.box_acq_reset_count,expand=False)        
         self.box_buttons.pack_start(self.label_acq_reset_count2,expand=False)
