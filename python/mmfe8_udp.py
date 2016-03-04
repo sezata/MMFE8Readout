@@ -38,16 +38,13 @@ class udp_stuff:
             data, server = sock.recvfrom(4096)
 
             if debug:
-                print
-                print "Received %s" % (data)
-                print
-
+                print "Receive %s" % (data)
+                
         except:
             print "ERROR: UDP communication failed.", sys.exc_info()[0]
             return
 
         if debug:
-            print
             print "Closing socket"
             print
         sock.close()
