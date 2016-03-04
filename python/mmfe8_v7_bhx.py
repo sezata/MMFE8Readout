@@ -285,7 +285,7 @@ class MMFE8:
                     #n= n+1       
                     n=n+2 #paolo
 					
-   def read_xadc(self, widget):
+    def read_xadc(self, widget):
         msg = "x \0 \n"
         for i in range(100):
             myXADC = self.udp.udp_client(msg,self.UDP_IP,self.UDP_PORT)
