@@ -285,29 +285,24 @@ class MMFE8:
                     #n= n+1       
                     n=n+2 #paolo
 					
-					
-    def read_xadc(self, widget):
-        #msg = "w 0x44A10058 1 \0 \n"
-        self.udp.udp_client(msg,self.UDP_IP,self.UDP_PORT)
-        msg = "x \0 \n"  # command to command_handler to send xadc
-        # 1. request pdo from microblaze
-        myXADC = self.udp.udp_client(msg,self.UDP_IP,self.UDP_PORT) 
-        # 2. create an empty list
-        pd = [] 
-        n = 1
-        while n<9:
-            
-            xadcList = myXADC.split()
-            thing1 = int(xadcList[n],16)
-            thing2 = (thing1 * 1.0)/4096.0
-            pd.append(thing2)
-            n = n+1
+   def read_xadc(self, widget):
+        msg = "x \0 \n"
+        for i in range(100):
+            myXADC = self.udp.udp_client(msg,self.UDP_IP,self.UDP_PORT)
+            pd = []
+            n = 1
+            while n<9:
+                xadcList = myXADC.split()
+                thing1 = int(xadcList[n],16)
+                thing2 = (thing1 * 1.0)/4096.0
+                pd.append(thing2)
+                n = n+1
             print 'XADC = {0:.4f} {1:.4f} {2:.4f} {3:.4f} {4:.4f} {5:.4f} {6:.4f} {7:.4f}'.format(pd[0],pd[1],pd[2],pd[3],pd[4],pd[5],pd[6],pd[7]) 
             s = '{0:.4f}\t{1:.4f}\t{2:.4f}\t{3:.4f}\t{4:.4f}\t{5:.4f}\t{6:.4f}\t{7:.4f}\n'.format(pd[0],pd[1],pd[2],pd[3],pd[4],pd[5],pd[6],pd[7])
             with open('mmfe8-xadc.dat', 'a') as myfile:
                 myfile.write(s)  
-        return
-		
+        return					
+
     def internal_trigger(self, widget):
         if widget.get_active():
             widget.set_label("ON")
