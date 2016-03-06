@@ -27,10 +27,9 @@ import socket
 import time
 import math
 
-from mmfe8_vmm      import vmm
-from mmfe8_chan     import channel
 from mmfe8_userRegs import userRegs
-from mmfe8_udp      import udp_stuff
+from vmm            import VMM
+from udp            import udp_stuff
 
 nvmms = 8
 
@@ -176,15 +175,9 @@ class MMFE8:
     def read_xadc(self, widget):
         message = "x"
         for i in range(100):
-            myXADC = self.udp.udp_client(message, self.UDP_IP, self.UDP_PORT)
-            pd = []
-            n = 1
-            while n < 9:
-                xadcList = myXADC.split()
-                thing1 = int(xadcList[n],16)
-                thing2 = (thing1 * 1.0)/4096.0
-                pd.append(thing2)
-                n = n+1
+            data      = self.udp.udp_client(message, self.UDP_IP, self.UDP_PORT)
+            data_list = data.split()
+            pd = [int(data_list[n], 16)/4096.0 for n in xrange(1, 9)]
             print 'XADC = {0:.4f} {1:.4f} {2:.4f} {3:.4f} {4:.4f} {5:.4f} {6:.4f} {7:.4f}'.format(pd[0],pd[1],pd[2],pd[3],pd[4],pd[5],pd[6],pd[7]) 
             s = '{0:.4f}\t{1:.4f}\t{2:.4f}\t{3:.4f}\t{4:.4f}\t{5:.4f}\t{6:.4f}\t{7:.4f}\n'.format(pd[0],pd[1],pd[2],pd[3],pd[4],pd[5],pd[6],pd[7])
             with open('mmfe8-xadc.dat', 'a') as myfile:
@@ -337,9 +330,9 @@ class MMFE8:
         last_digit        = last_three_digits[-1]
         last_digit_hex    = hex(int(last_digit))
         message = "w 0x44A10150 %s" % (last_digit_hex)
-        print "Writing last digit of IP address (%s) to %s" % (last_digit_hex, address)
+        print "Writing last digit of IP address: %s" % (last_digit_hex)
         self.udp.udp_client(message, self.UDP_IP, self.UDP_PORT)
-            
+        
     def set_display(self, widget):
         word = '{0:05b}'.format(widget.get_active())
         for bit in xrange(len(word)):
@@ -352,7 +345,7 @@ class MMFE8:
         for bit in xrange(len(word)):
             self.vmm_cfg_sel[16 - bit] = int(word[bit])
 
-        self.write_vmm_cfg_sel()
+        # self.write_vmm_cfg_sel()
 
     def readout_vmm_callback(self, widget, ivmm):
         self.readout_runlength[16+ivmm] = 1 if widget.get_active() else 0
@@ -362,7 +355,6 @@ class MMFE8:
         self.vmm_cfg_sel[ivmm] = 1 if widget.get_active() else 0
         self.load_IDs()
 
-    # init
     def __init__(self):
         print
         print "loading MMFE8 GUI"
@@ -396,7 +388,8 @@ class MMFE8:
         #print "loading Registers..."
         self.VMM = []
         for i in range(8):
-            self.VMM.append(vmm())
+            # self.VMM.append(vmm())
+            self.VMM.append(VMM())
         self.udp = udp_stuff()
         self.ipAddr = ["127.0.0.1",
                        "192.168.0.130",
@@ -673,7 +666,7 @@ class MMFE8:
         #self.box_ResetID.pack_start(self.button_resetVMM,expand=False)
 
         self.box_vmmID = gtk.HBox()
-        self.box_vmmID.pack_start(self.button_setIDs,expand=False) #
+        self.box_vmmID.pack_start(self.button_setIDs,expand=False)
         self.box_vmmID.pack_start(self.label_Space21,expand=True)
         self.box_vmmID.pack_start(self.label_display_id,expand=False)
         self.box_vmmID.pack_start(self.combo_display,expand=False)

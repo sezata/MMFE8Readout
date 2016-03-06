@@ -4,7 +4,7 @@ pygtk.require('2.0')
 import gtk
 import numpy as np
 
-from mmfe8_chan import channel
+from channel import Channel
 
 class registers:
     SPG    = 16 # input charge polarity
@@ -73,75 +73,6 @@ class VMM:
     
     def glob_callback(self, widget, register):
         self.globalreg[register] = 1 if widget.get_active() else 0
-
-    def glob_SPG_callback(self, widget):
-        self.globalreg[registers.SPG] = 1 if widget.get_active() else 0
-
-    def glob_SDPeak_callback(self, widget):
-        self.globalreg[registers.SDP] = 1 if widget.get_active() else 0
-
-    def glob_SBMX_callback(self, widget):
-        self.globalreg[registers.SBMX] = 1 if widget.get_active() else 0
-
-    def glob_SBFT_callback(self, widget):
-        self.globalreg[registers.SBFT] = 1 if widget.get_active() else 0
-    
-    def glob_SBFP_callback(self, widget):
-        self.globalreg[registers.SBFP] = 1 if widget.get_active() else 0
-    
-    def glob_SBFM_callback(self, widget):
-        self.globalreg[registers.SBFM] = 1 if widget.get_active() else 0
-    
-    def glob_SLG_callback(self, widget):
-        self.globalreg[registers.SLG] = 1 if widget.get_active() else 0
-
-    def glob_SCMX_callback(self, widget):
-        self.globalreg[registers.SCMX] = 1 if widget.get_active() else 0
-    
-    def glob_SFA_callback(self, widget):
-        self.globalreg[registers.SFA] = 1 if widget.get_active() else 0
-    
-    def glob_SFAM_value(self, widget):
-        self.globalreg[registers.SFAM] = 1 if widget.get_active() else 0
-
-    def glob_SFM_callback(self, widget):
-        self.globalreg[registers.SFM] = 1 if widget.get_active() else 0
-
-    def glob_SNG_callback(self, widget):
-        self.globalreg[registers.SNG] = 1 if widget.get_active() else 0
-    
-    def glob_STOT_value(self, widget):
-        self.globalreg[registers.STOT] = 1 if widget.get_active() else 0
-    
-    def glob_STTT_callback(self, widget):
-        self.globalreg[registers.STTT] = 1 if widget.get_active() else 0
-    
-    def glob_SSH_callback(self, widget):
-        self.globalreg[registers.SSH] = 1 if widget.get_active() else 0
-
-    def glob_S8b_callback(self,widget):
-        self.globalreg[registers.S8b] = 1 if widget.get_active() else 0
-    
-    def glob_S6b_callback(self, widget):
-        self.globalreg[registers.S6b] = 1 if widget.get_active() else 0
-    
-    def glob_SPDC_callback(self, widget):
-        self.globalreg[registers.SPDC] = 1 if widget.get_active() else 0
-    
-    def glob_SDCKS_callback(self, widget):
-        self.globalreg[registers.SDCKS] = 1 if widget.get_active() else 0
-    
-    def glob_SDCKA_callback(self, widget):
-        self.globalreg[registers.SDCKA] = 1 if widget.get_active() else 0
-    
-    def glob_SDCK6b_callback(self, widget):
-        self.globalreg[registers.SDCK6b] = 1 if widget.get_active() else 0
-    
-    def glob_SDRV_callback(self, widget):
-        self.globalreg[registers.SDRV] = 1 if widget.get_active() else 0
-    
-    def glob_STPP_callback(self, widget):
-        self.globalreg[registers.STPP] = 1 if widget.get_active() else 0
 
     def glob_SM_value(self, widget):
         word = '{0:06b}'.format(widget.get_active())
@@ -287,7 +218,7 @@ class VMM:
         #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
         for chan_num in range(64):
-            self.chan_list.append(channel(chan_num))
+            self.chan_list.append(Channel(chan_num))
 
         #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         #                   QUICK SET WIDGETS   
@@ -422,47 +353,47 @@ class VMM:
         self.box_vmm_number.pack_start(self.combo_vmm_number, expand=False)
 
         self.check_button_SPG = gtk.CheckButton() 
+        self.check_button_SPG.connect("toggled", self.glob_callback, registers.SPG)
         self.label_SPG = gtk.Label("Input Charge Polarity")
         self.label_SPG.set_markup('<span color="green"><b>Input Charge Polarity   </b></span>')
         self.label_SPGa = gtk.Label(" spg")   
-        self.check_button_SPG.connect("toggled", self.glob_SPG_callback)
         self.box_SPG = gtk.HBox()
         self.box_SPG.pack_start(self.label_SPG, expand=False) 
         self.box_SPG.pack_start(self.check_button_SPG, expand=False)
         self.box_SPG.pack_start(self.label_SPGa, expand=False)
             
+        self.check_button_SBMX = gtk.CheckButton("")
+        self.check_button_SBMX.connect("toggled", self.glob_callback, registers.SBMX)
+        self.check_button_SBMX.set_active(0)
         self.label_SBMX = gtk.Label("Route Analog Monitor to PDO Output")
         self.label_SBMX.set_markup('<span color="green"><b>Route Analog Monitor to PDO Output   </b></span>')
-        self.check_button_SBMX = gtk.CheckButton("")
-        self.check_button_SBMX.connect("toggled", self.glob_SBMX_callback)
-        self.check_button_SBMX.set_active(0)
         self.label_SBMXa = gtk.Label(" sbmx")
         self.box_SBMX = gtk.HBox()
         self.box_SBMX.pack_start(self.label_SBMX, expand=False)
         self.box_SBMX.pack_start(self.check_button_SBMX, expand=False)
         self.box_SBMX.pack_start(self.label_SBMXa, expand=False)
 
+        self.check_button_SDP = gtk.CheckButton()
+        self.check_button_SDP.connect("toggled", self.glob_callback, registers.SDP)
         self.label_SDP = gtk.Label("Disable-at-Peak")
         self.label_SDP.set_markup('<span color="green"><b>Disable-at-Peak   </b></span>')
-        self.check_button_SDP = gtk.CheckButton()
-        self.check_button_SDP.connect("toggled", self.glob_SDPeak_callback)
         self.label_SDPa = gtk.Label(" sdp")
         self.box_SDP = gtk.HBox()
         self.box_SDP.pack_start(self.label_SDP, expand=False)
         self.box_SDP.pack_start(self.check_button_SDP, expand=False)
         self.box_SDP.pack_start(self.label_SDPa, expand=False)
 
-        self.label_SBXX = gtk.Label("Analog Output Buffers:")
-        self.label_SBXX.set_markup('<span color="green"><b>Analog Output Buffers   </b></span>')
         self.check_button_SBFT = gtk.CheckButton("TDO")
-        self.check_button_SBFT.connect("toggled", self.glob_SBFT_callback)
+        self.check_button_SBFT.connect("toggled", self.glob_callback, registers.SBFT)
         self.check_button_SBFT.set_active(1)
         self.check_button_SBFP = gtk.CheckButton("PDO")
-        self.check_button_SBFP.connect("toggled", self.glob_SBFP_callback)
+        self.check_button_SBFP.connect("toggled", self.glob_callback, registers.SBFP)
         self.check_button_SBFP.set_active(1)
         self.check_button_SBFM = gtk.CheckButton("MO")
-        self.check_button_SBFM.connect("toggled", self.glob_SBFM_callback)
+        self.check_button_SBFM.connect("toggled", self.glob_callback, registers.SBFM)
         self.check_button_SBFM.set_active(1)
+        self.label_SBXX = gtk.Label("Analog Output Buffers:")
+        self.label_SBXX.set_markup('<span color="green"><b>Analog Output Buffers   </b></span>')
         self.box_SBXX = gtk.HBox()
         self.box_SBXX.pack_start(self.label_SBXX, expand=False)
         self.box_SBXX.pack_start(self.check_button_SBFT, expand=False)
@@ -470,9 +401,9 @@ class VMM:
         self.box_SBXX.pack_start(self.check_button_SBFM, expand=False)
         
         self.check_button_SLG = gtk.CheckButton() 
+        self.check_button_SLG.connect("toggled", self.glob_callback, registers.SLG)
         self.label_SLG = gtk.Label("Leakage Current Disable")
         self.label_SLG.set_markup('<span color="green"><b>Leakage Current Disable   </b></span>')   
-        self.check_button_SLG.connect("toggled", self.glob_SLG_callback)
         self.label_SLGa = gtk.Label(" slg")
         self.box_SLG = gtk.HBox()
         self.box_SLG.pack_start(self.label_SLG, expand=False) 
@@ -495,7 +426,7 @@ class VMM:
         self.label_SCMX = gtk.Label(" scmx")
         self.label_SCMX.set_markup('<span color="green"><b>SCMX   </b></span>')
         self.check_button_SCMX = gtk.CheckButton()   
-        self.check_button_SCMX.connect("toggled", self.glob_SCMX_callback)
+        self.check_button_SCMX.connect("toggled", self.glob_callback, registers.SCMX)
         self.check_button_SCMX.set_active(1)
         self.box_SCMX = gtk.HBox()
         self.box_SCMX.pack_start(self.label_SCMX, expand=False)
@@ -506,13 +437,13 @@ class VMM:
         self.label_SFA = gtk.Label("ART Enable")
         self.label_SFA.set_markup('<span color="green"><b>ART Enable   </b></span>')    
         self.check_button_SFA = gtk.CheckButton()
-        self.check_button_SFA.connect("toggled",self.glob_SFA_callback)
+        self.check_button_SFA.connect("toggled", self.glob_callback, registers.SFA)
         self.check_button_SFA.set_active(True)
         self.label_SFAa = gtk.Label(" sfa")
         self.label_mode_SFAM = gtk.Label("  Mode    ")
         self.label_mode_SFAM.set_markup('<span color="green"><b>  Mode    </b></span>')
         self.combo_SFAM = gtk.combo_box_new_text()
-        self.combo_SFAM.connect("changed",self.glob_SFAM_value)
+        self.combo_SFAM.connect("changed", self.glob_callback, registers.SFAM)
         self.combo_SFAM.append_text("timing-at-threshold")      
         self.combo_SFAM.append_text("timing-at-peak")
         self.combo_SFAM.set_active(0)
@@ -543,7 +474,7 @@ class VMM:
         self.check_button_SFM = gtk.CheckButton()
         self.label_SFM = gtk.Label("SFM")
         self.label_SFM.set_markup('<span color="green"><b>SFM   </b></span>')   
-        self.check_button_SFM.connect("toggled", self.glob_SFM_callback)
+        self.check_button_SFM.connect("toggled", self.glob_callback, registers.SFM)
         self.check_button_SFM.set_active(1)
         self.label_SFMb = gtk.Label("  Doubles the Leakage Current")
         self.label_SFMb.set_markup('<span color="green"><b>  (Doubles the Leakage Current)</b></span>')        
@@ -574,7 +505,7 @@ class VMM:
         self.check_button_SNG = gtk.CheckButton() 
         self.label_SNG = gtk.Label("Neighbor Triggering")
         self.label_SNG.set_markup('<span color="green"><b>Neighbor Triggering   </b></span>')    
-        self.check_button_SNG.connect("toggled",self.glob_SNG_callback)
+        self.check_button_SNG.connect("toggled", self.glob_callback, registers.SNG)
         self.label_SNGa = gtk.Label(" sng")
         self.box_SNG = gtk.HBox()
         self.box_SNG.pack_start(self.label_SNG, expand=False) 
@@ -584,12 +515,12 @@ class VMM:
         self.label_STTT = gtk.Label("Timing Outputs")
         self.label_STTT.set_markup('<span color="green"><b>Timing Outputs </b></span>')
         self.check_button_STTT = gtk.CheckButton()
-        self.check_button_STTT.connect("toggled",self.glob_STTT_callback)
+        self.check_button_STTT.connect("toggled", self.glob_callback, registers.STTT)
         self.label_STTTa = gtk.Label(" sttt")
         self.label_mode_STOT = gtk.Label("  Mode    ")
         self.label_mode_STOT.set_markup('<span color="green"><b>  Mode  </b></span>')
         self.combo_STOT = gtk.combo_box_new_text()
-        self.combo_STOT.connect("changed",self.glob_STOT_value)      
+        self.combo_STOT.connect("changed", self.glob_callback, registers.STOT)
         self.combo_STOT.append_text("threshold-to-peak")
         self.combo_STOT.append_text("time-over-threshold")
         self.combo_STOT.set_active(0)        
@@ -605,7 +536,7 @@ class VMM:
         self.label_SSH = gtk.Label("Sub-Hysteresis\nDiscrimination")    
         self.label_SSH.set_markup('<span color="green"><b>Sub-Hysteresis   \nDiscrimination</b></span>')
         self.check_button_SSH = gtk.CheckButton()
-        self.check_button_SSH.connect("toggled", self.glob_SSH_callback)
+        self.check_button_SSH.connect("toggled", self.glob_callback, registers.SSH)
         self.label_SSHa = gtk.Label(" ssh")
         self.box_SSH = gtk.HBox()
         self.box_SSH.pack_start(self.label_SSH, expand=False)        
@@ -615,7 +546,7 @@ class VMM:
         self.label_STPP = gtk.Label("Timing Outputs Control 2")    
         self.label_STPP.set_markup('<span color="green"><b>Timing Outputs Control 2   </b></span>')
         self.check_button_STPP = gtk.CheckButton()
-        self.check_button_STPP.connect("toggled", self.glob_STPP_callback)
+        self.check_button_STPP.connect("toggled", self.glob_callback, registers.STPP)
         self.label_STPPa = gtk.Label(" stpp")
         self.box_STPP = gtk.HBox()
         self.box_STPP.pack_start(self.label_STPP, expand=False)        
@@ -734,7 +665,7 @@ class VMM:
         self.label_S6b = gtk.Label("6-bit ADC Enable")
         self.label_S6b.set_markup('<span color="green"><b>6-bit ADC Enable   </b></span>')
         self.check_button_S6b = gtk.CheckButton()   
-        self.check_button_S6b.connect("toggled", self.glob_S6b_callback)
+        self.check_button_S6b.connect("toggled", self.glob_callback, registers.S6b)
         self.check_button_S6b.set_active(False)
         self.label_S6ba = gtk.Label("Disables 8 & 10 bit ADC")
         self.label_S6ba.set_markup('<span color="green"><b>  (Disables 8 &amp; 10 bit ADC)</b></span>')
@@ -748,7 +679,7 @@ class VMM:
         self.label_Var_S8b = gtk.Label("8-bit ADC Mode")
         self.label_Var_S8b.set_markup('<span color="green"><b>8-bit ADC Mode   </b></span>')
         self.combo_S8b = gtk.CheckButton()
-        self.combo_S8b.connect("toggled", self.glob_S8b_callback)
+        self.combo_S8b.connect("toggled", self.glob_callback, registers.S8b)
         self.combo_S8b.set_active(1)
         self.label_Var_S8ba = gtk.Label(" s8b")
         self.box_S8b = gtk.HBox()
@@ -759,7 +690,7 @@ class VMM:
         self.label_Var_SPDC = gtk.Label("ADCs Enable")
         self.label_Var_SPDC.set_markup('<span color="green"><b>ADCs Enable   </b></span>')
         self.button_SPDC = gtk.CheckButton()
-        self.button_SPDC.connect("toggled", self.glob_SPDC_callback)
+        self.button_SPDC.connect("toggled", self.glob_callback, registers.SPDC)
         self.button_SPDC.set_active(1)
         self.label_Var_SPDCa = gtk.Label(" spdc")
         self.box_SPDC = gtk.HBox()
@@ -770,7 +701,7 @@ class VMM:
         self.label_SDCKS = gtk.Label("Dual Clock Edge\nSerialized Data Enable\n")    
         self.label_SDCKS.set_markup('<span color="green"><b>Dual Clock Edge\nSerialized Data Enable\n   </b></span>')
         self.check_button_SDCKS = gtk.CheckButton()
-        self.check_button_SDCKS.connect("toggled", self.glob_SDCKS_callback)
+        self.check_button_SDCKS.connect("toggled", self.glob_callback, registers.SDCKS)
         self.label_SDCKSa = gtk.Label(" sdcks")
         self.box_SDCKS = gtk.HBox()
         self.box_SDCKS.pack_start(self.label_SDCKS, expand=False)        
@@ -780,7 +711,7 @@ class VMM:
         self.label_SDCKA = gtk.Label("Dual Clock Edge\nSerialized ART Enable\n")    
         self.label_SDCKA.set_markup('<span color="green"><b>Dual Clock Edge\nSerialized ART Enable\n   </b></span>')
         self.check_button_SDCKA = gtk.CheckButton()
-        self.check_button_SDCKA.connect("toggled", self.glob_SDCKA_callback)
+        self.check_button_SDCKA.connect("toggled", self.glob_callback, registers.SDCKA)
         self.label_SDCKAa = gtk.Label(" sdcka")
         self.box_SDCKA = gtk.HBox()
         self.box_SDCKA.pack_start(self.label_SDCKA, expand=False)        
@@ -790,7 +721,7 @@ class VMM:
         self.label_SDCK6b = gtk.Label("Dual Clock Edge\nSerialized 6-bit Enable\n")    
         self.label_SDCK6b.set_markup('<span color="green"><b>Dual Clock Edge\nSerialized 6-bit Enable\n    </b></span>')
         self.check_button_SDCK6b = gtk.CheckButton()
-        self.check_button_SDCK6b.connect("toggled", self.glob_SDCK6b_callback)
+        self.check_button_SDCK6b.connect("toggled", self.glob_callback, registers.SDCK6b)
         self.label_SDCK6ba = gtk.Label(" sdck6b")
         self.box_SDCK6b = gtk.HBox()
         self.box_SDCK6b.pack_start(self.label_SDCK6b, expand=False)        
@@ -800,7 +731,7 @@ class VMM:
         self.label_SDRV = gtk.Label("Tristates Analog Outputs")    
         self.label_SDRV.set_markup('<span color="green"><b>Tristates Analog Outputs   </b></span>')
         self.check_button_SDRV = gtk.CheckButton()
-        self.check_button_SDRV.connect("toggled", self.glob_SDRV_callback)
+        self.check_button_SDRV.connect("toggled", self.glob_callback, registers.SDRV)
         self.check_button_SDRV.set_active(0)
         self.label_SDRVa = gtk.Label(" sdrv")
         self.box_SDRV = gtk.HBox()
