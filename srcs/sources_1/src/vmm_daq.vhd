@@ -55,7 +55,9 @@ entity vmm_daq is
 --    counts_to_acq_reset      : in   std_logic_vector( 31 DOWNTO 0)
       acq_rst_hold_term_count : in  std_logic_vector(31 downto 0);
       dt_state_o              : out std_logic_vector(3 downto 0)  := (others => '0');
-      acq_rst_counter_o       : out std_logic_vector(31 downto 0) := (others => '0')
+      acq_rst_counter_o       : out std_logic_vector(31 downto 0) := (others => '0');
+      fifo_rst_from_ext_trig : in std_logic;
+      mmfe_id_reg : in std_logic_vector(3 downto 0)
       );
 
 end vmm_daq;
@@ -478,11 +480,12 @@ begin
       
    fifo_64_32_512_inst : fifo_64_32_512
         PORT MAP (
-          rst => RESET,
+          rst => RESET or fifo_rst_from_ext_trig,
           wr_clk => vmm_clk_200,
           rd_clk => vmm_clk_200,
           din =>   b"000" & vmmNumber & vmm_data_buf(25 downto 0) &
-          b"1011" & turn_counter & vmm_data_buf(37 downto 26),
+          --nathan removed turn counter and added mmfe_id_reg nib
+          b"1011" & x"00"& mmfe_id_reg & x"0" & vmm_data_buf(37 downto 26),
           wr_en => wr_en,
           rd_en => rd_en,
           dout => dout,

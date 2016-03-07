@@ -39,7 +39,9 @@ entity toplevel is
         EXTERNAL_0_N : out std_logic;
 
         -- External trigger input
-        EXTERNAL_TRIGGER_HDMI : in std_logic;
+        --EXTERNAL_TRIGGER_HDMI : in std_logic;
+        EXTERNAL_TRIGGER_HDMI_P : in std_logic;
+        EXTERNAL_TRIGGER_HDMI_N : in std_logic;
 
         -- Clocks
         -- 200 MHz system clock
@@ -400,8 +402,10 @@ architecture STRUCTURE of toplevel is
         port (clk_40                  : in  std_logic;
               reset_bcid_counter      : in  std_logic;
               ext_trigger_in          : in  std_logic;
+              ext_trigger_en          : in  std_logic;
               ext_trigger_pulse_o     : out std_logic;
               busy_from_ext_trigger_o : out std_logic;
+              busy_from_acq_rst_o     : out std_logic;
               bcid_counter_o          : out std_logic_vector (11 downto 0);
               bcid_captured_o         : out std_logic_vector (11 downto 0);
               bcid_corrected_o        : out std_logic_vector (11 downto 0);
@@ -416,7 +420,13 @@ architecture STRUCTURE of toplevel is
               bcid_corrected_p4       : out std_logic_vector (11 downto 0);
               bcid_corrected_p5       : out std_logic_vector (11 downto 0);
               turn_counter_o          : out std_logic_vector (15 downto 0);
-              turn_counter_captured_o : out std_logic_vector (15 downto 0)
+              turn_counter_captured_o : out std_logic_vector (15 downto 0);
+              num_ext_trig_o          : out std_logic_vector (19 downto 0);
+              acq_rst_from_ext_trig_o : out std_logic;
+              vmm_cktk_ext_trig_en_o  : out std_logic;
+              read_data_o             : out std_logic;
+              fifo_rst_from_ext_trig_o : out std_logic;
+              reading_fin : in std_logic
               );
     end component;
 
@@ -537,7 +547,7 @@ architecture STRUCTURE of toplevel is
                 LEDx  : out std_logic_vector(2 downto 0);
                 testX : in  std_logic;
 
-                axi_reg : in array_80x32bit;  --axi config data
+                axi_reg : in array_81x32bit;  --axi config data
 
                 vmm_cfg_sel : in std_logic_vector(31 downto 0);
 
@@ -564,8 +574,9 @@ architecture STRUCTURE of toplevel is
 --        vmm_acq_rst_running         : in std_logic_vector( 7 downto 0);
 --        acq_rst_term_count          : in array_8x32bit;
                 dt_state             : out array_8x4bit;
-                acq_rst_counter      : out array_8x32bit
-
+                acq_rst_counter      : out array_8x32bit;
+                acq_rst_from_ext_trig : in std_logic;
+                fifo_rst_from_ext_trig : in std_logic
                 );
     end component;
 
@@ -586,6 +597,7 @@ architecture STRUCTURE of toplevel is
 
             vmm_ckbc    : in std_logic;
             vmm_ckbc_en : in std_logic;
+            vmm_ckbc_all_en : in std_logic;
 
             vmm_cktp      : in std_logic;
             vmm_cktp_en   : in std_logic;
@@ -742,9 +754,11 @@ architecture STRUCTURE of toplevel is
 --    signal clk_tp_period_cnt    : std_logic_vector(15 downto 0) := x"3E80";
 --    signal clk_tp_dutycycle_cnt : std_logic_vector(15 downto 0) := x"0200";
     -- ann changed these test pulse periods
-    signal clk_tp_period_cnt    : std_logic_vector(19 downto 0) := x"F4240";
+    signal clk_tp_period_cnt    : std_logic_vector(19 downto 0) := x"03E80";
+--    signal clk_tp_period_cnt    : std_logic_vector(19 downto 0) := x"F4240";
 --1 kHz
-    signal clk_tp_dutycycle_cnt : std_logic_vector(19 downto 0) := x"61A80";
+    signal clk_tp_dutycycle_cnt : std_logic_vector(19 downto 0) := x"00200";
+--    signal clk_tp_dutycycle_cnt : std_logic_vector(19 downto 0) := x"61A80";
     -- 400 microseconds
 
     signal counter_for_cktp_done : std_logic_vector(15 downto 0) := x"0000";
@@ -792,16 +806,14 @@ architecture STRUCTURE of toplevel is
     signal vmm_cktp_sync : std_logic;
     signal vmm_cktp_r    : std_logic;
     signal clk_tp_X      : std_logic;
+    signal clk_tp_enable : std_logic;
     signal clk_tp_sync   : std_logic;
     signal clk_tp_cntr   : std_logic_vector (19 downto 0) := (others => '0');
     signal clk_tp_out    : std_logic;
 
-    signal delay_count   : std_logic_vector (19 downto 0) := (others => '0');
-    signal delay_counter : std_logic_vector (19 downto 0) := (others => '0');
-    signal rise_counter  : std_logic_vector (15 downto 0) := x"0000";    
-    
     signal vmm_ckbc           : std_logic;
-    signal vmm_ckbc_en        : std_logic;
+    signal vmm_ckbc_en        : std_logic;  --from vmm_cfg
+    signal vmm_ckbc_all_en    : std_logic;
     signal reset_bcid_counter : std_logic;
     signal vmm_ckbc_sync      : std_logic;
     signal vmm_ckbc_R         : std_logic;
@@ -825,6 +837,7 @@ architecture STRUCTURE of toplevel is
 
     signal ext_trigger_pulse     : std_logic;
     signal busy_from_ext_trigger : std_logic;
+    signal busy_from_acq_rst     : std_logic;
     signal bcid_counter          : std_logic_vector (11 downto 0);
     signal bcid_captured         : std_logic_vector (11 downto 0);
     signal bcid_corrected        : std_logic_vector (11 downto 0);
@@ -841,6 +854,15 @@ architecture STRUCTURE of toplevel is
     signal turn_counter          : std_logic_vector (15 downto 0);
     signal turn_counter_captured : std_logic_vector (15 downto 0);
 
+    --ann
+    signal num_ext_trig          : std_logic_vector (19 downto 0);
+    signal acq_rst_from_ext_trig : std_logic;
+    signal acq_rst_from_ext_trig_d : std_logic;
+    signal acq_rst_from_ext_trig_edge : std_logic := '0';
+    signal vmm_cktk_ext_trig_en  : std_logic;
+    signal read_data  : std_logic;
+    signal fifo_rst  : std_logic;
+    
     signal clk_X_1 : std_logic;
     signal clk_X_2 : std_logic;
 
@@ -884,7 +906,7 @@ architecture STRUCTURE of toplevel is
 
     signal xxxx      : std_logic;
     signal reset_new : std_logic;
-    -- added for detecting edge
+    -- ann added
     signal reset_new_d : std_logic;
     signal reset_new_edge : std_logic;
 
@@ -896,6 +918,7 @@ architecture STRUCTURE of toplevel is
     attribute mark_debug of vmm_ena_vec : signal is "true";
     attribute mark_debug of vmm_ckbc    : signal is "true";
     attribute mark_debug of vmm_ckbc_en : signal is "true";
+    attribute mark_debug of vmm_ckbc_all_en : signal is "true";
     attribute mark_debug of vmm_cktp    : signal is "true";
     attribute mark_debug of cktp_done   : signal is "true";
     attribute mark_debug of vmm_cktk    : signal is "true";
@@ -920,6 +943,7 @@ architecture STRUCTURE of toplevel is
     attribute keep of vmm_ena_vec       : signal is "true";
     attribute keep of vmm_ckbc          : signal is "true";
     attribute keep of vmm_ckbc_en       : signal is "true";
+    attribute keep of vmm_ckbc_all_en   : signal is "true";
     attribute keep of vmm_cktp          : signal is "true";
     attribute keep of cktp_done         : signal is "true";
     attribute keep of vmm_cktk          : signal is "true";
@@ -952,6 +976,12 @@ architecture STRUCTURE of toplevel is
 
     -- external trigger signals
     signal ext_trigger_in  : std_logic;
+    signal ext_trigger_en  : std_logic;
+    signal ext_trigger_flag: std_logic;
+    signal ext_trigger_sim : std_logic_vector(15 downto 0);  --ann
+    signal reading_fin_flag : std_logic;  --ann
+    signal reading_fin_flag_d : std_logic;  --ann
+    signal reading_fin_flag_edge : std_logic;  --ann
     signal ext_trigger_deb : std_logic;
     signal turn_captured   : std_logic_vector (15 downto 0);
     signal Q1, Q2, Q3      : std_logic;
@@ -1100,12 +1130,13 @@ architecture STRUCTURE of toplevel is
 
     signal EXT_AXI_CLK    : std_logic;  --<< out  
     signal EXT_AXI_RESETN : std_logic;  --<< out  
-
-    signal axi_we_axi_reg : std_logic_vector (79 downto 0);
+-- nathan changed 79 to 80
+    signal axi_we_axi_reg : std_logic_vector (80 downto 0);
 
     signal axi_we_axi_reg_amux : std_logic;
-
-    signal axi_reg : array_80x32bit;    --axi config data
+    
+-- nathan changed to 81 type
+    signal axi_reg : array_81x32bit;    --axi config data
 
     signal axi_reg_amux               : std_logic_vector(3 downto 0);
     -- Created two, but only used one
@@ -1414,57 +1445,39 @@ begin
 -- bill was using barrel shifter at 200MHz for this, to use minimum pulse width, synchronized to clock edge
 -- easily changed by writing any desired pattern to barral shifter 
 
--- implemented CKTP synchronization with CKBC, set by variable called
--- delay_count which is axi register 78 (values of 0, 1, 2, 3, 4 corresponding
--- to multiples of 5 ns) --ann
-    
-    U_cktp_gen : process(clk_200, reset, delay_count)
+   --ann
+    edge_detect : process(clk_50, int_trig, int_trig_d)
     begin
-        if rising_edge(clk_200) then
+      if rising_edge(clk_50) then
+        int_trig_d <= int_trig;
+      end if;
+      int_trig_edge <= ((not int_trig_d) and int_trig);
+    end process edge_detect;
+
+    U_cktp_gen : process(clk_100, reset)
+    begin
+        if rising_edge(clk_100) then
             if (int_trig_edge = '1' or  reset = '1') then
-              if clk_bc_out = '1' then  --sync with CKBC
-                rise_counter <= rise_counter + '1';
-                if to_integer(unsigned(rise_counter)) = 1 then
-                clk_tp_cntr  <= clk_tp_period_cnt;
-                clk_tp_out   <= '0';
-                cktp_done    <= '0';
-                rise_counter <= (others => '0');                  
-                end if;
-              elsif clk_bc_out = '0' then     --want this to reset every cycle
-                rise_counter <= (others => '0');
-              end if;
+            --if reset = '1' then reset = '1'
+                clk_tp_cntr <= clk_tp_period_cnt;
+                clk_tp_out  <= '0';
+                cktp_done   <= '0';
             else
-                if(((busy_from_ext_trigger = '1') and (int_trig = '0'))
-                   or ((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1'))))    then  -- vmm_cktp_en currently hardwired to '1'
-                  if clk_tp_cntr = clk_tp_period_cnt then
-                     if clk_bc_out = '0' and clk_tp_out = '0' then
-                       if delay_counter = delay_count then
-                         clk_tp_out  <= '1';
-                         clk_tp_cntr <= delay_count + '1';
-                       else
-                         delay_counter <= delay_counter + '1';
-                       end if;
-                     elsif to_integer(unsigned(delay_counter)) /= 0 and clk_tp_out = '0' then
-                       if delay_counter = delay_count then
-                         clk_tp_out  <= '1';
-                         clk_tp_cntr <= delay_count + '1';
-                       else
-                         delay_counter <= delay_counter + '1';
-                       end if;
-                     end if;
-                  else
-                    clk_tp_cntr <= clk_tp_cntr + '1';
-                    if clk_tp_cntr = clk_tp_dutycycle_cnt then
-                      clk_tp_out    <= '0';
-                      delay_counter <= (others => '0');
+
+                
+--                if(((busy_from_ext_trigger = '1') and (int_trig = '0'))
+--                   or ((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1'))))    then  -- vmm_cktp_en currently hardwired to '1'
+                if((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1')))    then  -- vmm_cktp_en currently hardwired to '1'
+      --                if( int_trig = '1')  then  -- test
+                    if clk_tp_cntr = clk_tp_period_cnt then
+                        clk_tp_cntr <= (others => '0');
+                        clk_tp_out  <= '1';
+                    else
+                        clk_tp_cntr <= clk_tp_cntr + '1';
+                        if clk_tp_cntr = clk_tp_dutycycle_cnt then
+                            clk_tp_out <= '0';
+                        end if;
                     end if;
-                  end if;
-                elsif cktp_done = '1' then
-                  clk_tp_cntr <= clk_tp_cntr + '1';
-                  if clk_tp_cntr = clk_tp_dutycycle_cnt then
-                    clk_tp_out    <= '0';
-                    delay_counter <= (others =>  '0');
-                  end if;
                 end if;
 
                 if pulses = x"03e7" then  -- x"03e7" <=> 999 
@@ -1478,9 +1491,10 @@ begin
         end if;
     end process U_cktp_gen;
 
-    U_cktp_done : process (clk_tp_out, reset, int_trig_edge)
+    U_cktp_done : process (clk_tp_out, reset)
     begin
         if (int_trig_edge = '1' or  reset = '1') then
+        --if reset = '1' then
             counter_for_cktp_done <= (others => '0');
         else
             if rising_edge(clk_tp_out) then
@@ -1489,15 +1503,6 @@ begin
         end if;
     end process U_cktp_done;
 
-
-
-    edge_detect : process(clk_bc_out, int_trig, int_trig_d)
-    begin
-      if rising_edge(clk_bc_out) then
-        int_trig_d <= int_trig;
-      end if;
-      int_trig_edge <= ((not int_trig_d) and int_trig);
-    end process edge_detect;
 
 
     Ext_trig_sim : process(clk_100, reset)
@@ -1529,9 +1534,16 @@ begin
 
 
 --                     31         30            29         28            27          26         25         24
-    probe0_i <= vmm_ckbc & vmm_ckbc_en & vmm_cktp & vmm_cktp_en & cktp_done & vmm_cktk & vmm_ckdt & data_fifo_rd_en &
+    probe0_i <= vmm_ckbc & vmm_ckbc_all_en & vmm_cktp & vmm_cktp_en & cktp_done & vmm_cktk & vmm_ckdt & data_fifo_rd_en &
 --                  23                  22           21      20          19          18            13               12                  11
                 ext_trigger_pulse & clk_tp_out & reset & reset_new & reset_old & vmm_2display & vmm_gbl_rst & vmm_cfg_en_vec(0) & x"000";
+
+----                     31         30            29         28            27          26         25         24
+--    probe0_i <= vmm_ckbc & vmm_ckbc_en & vmm_cktp & vmm_cktp_en & cktp_done & vmm_cktk & vmm_ckdt & data_fifo_rd_en &
+----                  23                  22           21      20          19          18            13               12                  11
+--                ext_trigger_pulse & clk_tp_out & reset & reset_new & reset_old & vmm_2display & vmm_gbl_rst & vmm_cfg_en_vec(0) & x"000";
+
+
     
     probe8_i  <= vmm_data_buf_vec(0)(37 downto 0);
     probe9_i  <= vmm_data_buf_vec(1)(37 downto 0);
@@ -1583,20 +1595,43 @@ begin
 ------------------------------------------------
 
 
---  input for external trigger
-    ibuf_inst_1 : IBUF port map (O => ext_trigger_in, I => EXTERNAL_TRIGGER_HDMI);
 
--- simulated input
-    ext_trigger_sel : process (ext_trigger_in_sel)
+--  input for external trigger 
+--    ibuf_inst_1 : IBUF port map (O => ext_trigger_in, I => EXTERNAL_TRIGGER_HDMI);
+    ibuf_inst_1 : IBUFDS port map (O => ext_trigger_in, I => EXTERNAL_TRIGGER_HDMI_P, IB => EXTERNAL_TRIGGER_HDMI_N);
+
+    reading_fin_edge_detect : process(clk_50, reading_fin_flag, reading_fin_flag_d)
     begin
+      --rising edge detect
+      if rising_edge(clk_50) then
+        reading_fin_flag_d <= reading_fin_flag;
+      end if;
+      reading_fin_flag_edge <= ((not reading_fin_flag_d) and reading_fin_flag);
+    end process reading_fin_edge_detect;
+
+
+    
+-- simulated input
+    ext_trigger_sel : process (ext_trigger_in_sel, clk_40)
+    begin
+      if rising_edge(clk_40) then
         if ext_trigger_in_sel = '1' then
-            ext_trigger_in_sw <= ext_trigger_in;
+--            ext_trigger_sim <= '1';     -- getting trigger stuff
+--            ext_trigger_in_sw <= ext_trigger_in;
+          if unsigned(ext_trigger_sim) > 0 then
+            ext_trigger_flag <= '1';
+          else
+            ext_trigger_flag <= '0';
+          end if;
         else
-            ext_trigger_in_sw <= clk_ets_out;
+--          ext_trigger_sim <= '0';
+--            ext_trigger_in_sw <= clk_ets_out;
+          ext_trigger_flag <= '0';
         end if;
+      end if;
     end process ext_trigger_sel;
 
---   debounce it
+--   debounce it 
 --   i took the code from the template (coding examples, misc, debounce circuit) 
 --   here is the debounce circuit for the external_trigger_in
     process(clk_200)
@@ -1607,7 +1642,8 @@ begin
                 Q2 <= '0';
                 Q3 <= '0';
             else
-                Q1 <= ext_trigger_in;
+                Q1 <= ext_trigger_flag;
+--                Q1 <= ext_trigger_in;
                 Q2 <= Q1;
                 Q3 <= Q2;
             end if;
@@ -1616,10 +1652,10 @@ begin
 
     ext_trigger_deb <= Q1 and Q2 and Q3;
 
--- relevant vmm processes goes here
+--    vmm_ckbc_en <= not(busy_from_ext_trigger or busy_from_acq_rst);  
 
-
-
+    --should include busy from just resetting the BCID counter
+    
 -----------------------------------
 --External Trigger Implementation  
 -----------------------------------
@@ -1632,8 +1668,10 @@ begin
             clk_40                  => clk_40,
             reset_bcid_counter      => reset_bcid_counter,
             ext_trigger_in          => ext_trigger_deb,
+            ext_trigger_en          => ext_trigger_in_sel,
             ext_trigger_pulse_o     => ext_trigger_pulse,
             busy_from_ext_trigger_o => busy_from_ext_trigger,
+            busy_from_acq_rst_o     => busy_from_acq_rst,
             bcid_counter_o          => bcid_counter,
             bcid_captured_o         => bcid_captured,
 
@@ -1650,7 +1688,13 @@ begin
             bcid_corrected_p5 => bcid_corrected_p5,
             turn_counter_o    => turn_counter,
 
-            turn_counter_captured_o => turn_counter_captured
+            turn_counter_captured_o => turn_counter_captured,
+            num_ext_trig_o => num_ext_trig,
+            acq_rst_from_ext_trig_o => acq_rst_from_ext_trig,
+            vmm_cktk_ext_trig_en_o => vmm_cktk_ext_trig_en,
+            read_data_o => read_data,
+            fifo_rst_from_ext_trig_o => fifo_rst,
+            reading_fin => reading_fin_flag
             );
 
 
@@ -1843,8 +1887,9 @@ begin
 --        vmm_acq_rst_running     => vmm_acq_rst_running,
 --        acq_rst_term_count      => acq_rst_term_count,
             dt_state             => dt_state,
-            acq_rst_counter      => acq_rst_counter
-
+            acq_rst_counter      => acq_rst_counter,
+            acq_rst_from_ext_trig => acq_rst_from_ext_trig,
+            fifo_rst_from_ext_trig => fifo_rst
             );
 
 
@@ -2000,25 +2045,44 @@ begin
     ckbc_diff_7 : OBUFDS port map (O => CKBC_7_P, OB => CKBC_7_N, I => vmm_ckbc_7);
     ckbc_diff_8 : OBUFDS port map (O => CKBC_8_P, OB => CKBC_8_N, I => vmm_ckbc_8);
 
-    vmm_ckbc_R <= not(vmm_ckbc_en);
+    vmm_ckbc_R <= not(vmm_ckbc_all_en);
+--    vmm_ckbc_R <= not(vmm_ckbc_en);
 
     ckbc_ODDR_1 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
-        port map(Q => vmm_ckbc_1, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+        port map(Q => vmm_ckbc_1, C => vmm_ckbc, CE => vmm_ckbc_all_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
     ckbc_ODDR_2 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
-        port map(Q => vmm_ckbc_2, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+        port map(Q => vmm_ckbc_2, C => vmm_ckbc, CE => vmm_ckbc_all_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
     ckbc_ODDR_3 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
-        port map(Q => vmm_ckbc_3, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+        port map(Q => vmm_ckbc_3, C => vmm_ckbc, CE => vmm_ckbc_all_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
     ckbc_ODDR_4 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
-        port map(Q => vmm_ckbc_4, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+        port map(Q => vmm_ckbc_4, C => vmm_ckbc, CE => vmm_ckbc_all_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
     ckbc_ODDR_5 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
-        port map(Q => vmm_ckbc_5, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+        port map(Q => vmm_ckbc_5, C => vmm_ckbc, CE => vmm_ckbc_all_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
     ckbc_ODDR_6 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
-        port map(Q => vmm_ckbc_6, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+        port map(Q => vmm_ckbc_6, C => vmm_ckbc, CE => vmm_ckbc_all_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
     ckbc_ODDR_7 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
-        port map(Q => vmm_ckbc_7, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+        port map(Q => vmm_ckbc_7, C => vmm_ckbc, CE => vmm_ckbc_all_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
     ckbc_ODDR_8 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
-        port map(Q => vmm_ckbc_8, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
-    
+        port map(Q => vmm_ckbc_8, C => vmm_ckbc, CE => vmm_ckbc_all_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+
+
+    --ckbc_ODDR_1 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
+    --    port map(Q => vmm_ckbc_1, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+    --ckbc_ODDR_2 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
+    --    port map(Q => vmm_ckbc_2, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+    --ckbc_ODDR_3 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
+    --    port map(Q => vmm_ckbc_3, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+    --ckbc_ODDR_4 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
+    --    port map(Q => vmm_ckbc_4, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+    --ckbc_ODDR_5 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
+    --    port map(Q => vmm_ckbc_5, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+    --ckbc_ODDR_6 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
+    --    port map(Q => vmm_ckbc_6, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+    --ckbc_ODDR_7 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
+    --    port map(Q => vmm_ckbc_7, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+    --ckbc_ODDR_8 : ODDR generic map(DDR_CLK_EDGE => "OPPOSITE_EDGE", INIT => '0', SRTYPE => "SYNC")
+    --    port map(Q => vmm_ckbc_8, C => vmm_ckbc, CE => vmm_ckbc_en, D1 => '1', D2 => '0', R => vmm_ckbc_R, S => '0');
+
     vmm_ckbc <= clk_bc_out;
 
 
@@ -2337,6 +2401,7 @@ begin
 
             vmm_ckbc    => vmm_ckbc,
             vmm_ckbc_en => vmm_ckbc_en,
+            vmm_ckbc_all_en => vmm_ckbc_all_en,
 
             vmm_cktp    => vmm_cktp,
             vmm_cktp_en => vmm_cktp_en,
@@ -2398,7 +2463,9 @@ begin
 
 
     process(clk_200, vmm_cfg_en_vec, vmm_cktk_daq_en_vec, vmm_cktk_cfg_sr_en,
-            vmm_ena_vmm_cfg_sm_vec, vmm_ena_cfg_rst, vmm_ena_cfg_sr, vmm_wen_cfg_sr, vmm_wen_cfg_rst, reset_new_edge)
+            vmm_ena_vmm_cfg_sm_vec, vmm_ena_cfg_rst, vmm_ena_cfg_sr, vmm_wen_cfg_sr,
+            vmm_wen_cfg_rst, reset_new_edge, vmm_cktk_ext_trig_en, busy_from_ext_trigger,
+            busy_from_acq_rst, vmm_ckbc_en)
 
     begin
         if(rising_edge(clk_200)) then
@@ -2407,14 +2474,39 @@ begin
                     vmm_di_en_vec(I)   <= '1';
                     vmm_cktk_en_vec(I) <= vmm_cktk_cfg_sr_en;
 --              vmm_ena_vmm_cfg_sm_vec( I) <= vmm_ena_vmm_cfg_sm;
-                    vmm_wen_vec(I)     <= vmm_wen_cfg_sr or vmm_wen_gbl_rst or vmm_wen_acq_rst(I);
-                    vmm_ena_vec(I)     <= vmm_ena_cfg_sr or vmm_ena_gbl_rst or vmm_ena_acq_rst(I) or (vmm_ena_vmm_cfg_sm_vec(I) and (not vmm_acq_rst_running(I)));
-                else
+                    vmm_wen_vec(I)     <= vmm_wen_cfg_sr or vmm_wen_gbl_rst or vmm_wen_acq_rst(I)  ; 
+                    vmm_ena_vec(I)     <= vmm_ena_cfg_sr or
+                                          vmm_ena_gbl_rst or
+                                          vmm_ena_acq_rst(I) or
+                                          (vmm_ena_vmm_cfg_sm_vec(I) and (not vmm_acq_rst_running(I)));
+               elsif (ext_trigger_in_sel = '1') then  --reset controls for
+                                                      --ext_trig project
                     vmm_di_en_vec(I)   <= '0';
-                    vmm_cktk_en_vec(I) <= vmm_cktk_daq_en_vec(I);
-                    vmm_wen_vec(I)     <= vmm_wen_acq_rst(I);
-                    --changed to set ENA high after a sys rst
-                    vmm_ena_vec(I)     <= vmm_ena_acq_rst(I) or (reset_new_edge and (not vmm_acq_rst_running(I))) or (vmm_ena_vmm_cfg_sm_vec(I) and (not vmm_acq_rst_running(I)));
+                    vmm_cktk_en_vec(I) <= vmm_cktk_daq_en_vec(I)
+                                          and (vmm_cktk_ext_trig_en or not(ext_trigger_in_sel));
+                    vmm_ckbc_all_en <=  vmm_ckbc_en and not(busy_from_ext_trigger or busy_from_acq_rst); --
+                    vmm_wen_vec(I)     <= vmm_wen_acq_rst(I) ; 
+                    vmm_ena_vec(I)     <= vmm_ena_acq_rst(I)
+                                          or (reset_new_edge and (not vmm_acq_rst_running(I)))
+                                          or (vmm_ena_vmm_cfg_sm_vec(I) and (not vmm_acq_rst_running(I)));
+               else
+                    vmm_di_en_vec(I)   <= '0';
+                    vmm_cktk_en_vec(I) <= vmm_cktk_daq_en_vec(I)
+                                          and (vmm_cktk_ext_trig_en or not(ext_trigger_in_sel));
+                    vmm_ckbc_all_en <=  vmm_ckbc_en and not(busy_from_ext_trigger or busy_from_acq_rst); --
+                    --added combined control
+                                                                  
+--              vmm_ena_vmm_cfg_sm_vec( I) <= vmm_ena_vmm_cfg_sm;
+                    vmm_wen_vec(I)     <= vmm_wen_acq_rst(I) ;  --
+                    
+                    -----------------------------------------------------------
+--                    vmm_wen_vec(I)     <= vmm_wen_acq_rst(I);
+--                    vmm_ena_vec(I)     <= vmm_ena_acq_rst(I) or (vmm_ena_vmm_cfg_sm_vec(I) and (not vmm_acq_rst_running(I)));
+                    -- ann changed
+--                    vmm_ena_vec(I)     <= vmm_ena_acq_rst(I) or (reset_new_edge and (not vmm_acq_rst_running(I))) or (vmm_ena_vmm_cfg_sm_vec(I) and (not vmm_acq_rst_running(I)));
+                    vmm_ena_vec(I)     <= vmm_ena_acq_rst(I)
+                                          or (reset_new_edge and (not vmm_acq_rst_running(I)))
+                                          or (vmm_ena_vmm_cfg_sm_vec(I) and (not vmm_acq_rst_running(I)));
                 end if;
             end loop;
 
@@ -2597,6 +2689,21 @@ begin
             EXT_AXI_rdata <= DS2411_low;
         elsif (axi_addr_read = X"011C") then
             EXT_AXI_rdata <= DS2411_high;
+--        elsif (axi_addr_read = X"0140") then
+--          EXT_AXI_rdata(0) <= reading_fin_flag;
+        elsif (axi_addr_read = X"0144") then  -- reg 77
+       --   EXT_AXI_rdata <= (others => '0')                      ;
+          EXT_AXI_rdata <= x"0000000" & b"000" & read_data;
+        elsif (axi_addr_read = X"014C") then  -- reg 79
+          EXT_AXI_rdata <= bcid_captured & num_ext_trig;
+--          EXT_AXI_rdata <= X"12345678";
+-- nathan
+--        elsif (axi_addr_read = X"0150") then  --reg 80 0x14d/4 -4
+--         EXT_AXI_rdata <= (others => '0');
+       --  elsif (axi_addr_read = X"0150") then  --reg 80 0x14d/4 -4 
+         --  EXT_AXI_rdata <= (others => '0')                      ;
+--          EXT_AXI_rdata(0) <=  read_data;                
+          
             
         elsif (axi_addr_read = X"0200") then
             EXT_AXI_rdata <= std_logic_vector(resize(unsigned(axi_reg_amux), 32));
@@ -2632,8 +2739,8 @@ begin
                 axi_reg <= (others => (others => '0'));
 
             else
-
-                for i in 0 to 79 loop
+--nathan changed 79 to 80
+                for i in 0 to 80 loop
                     if(axi_we_axi_reg(I) = '1') then
                         axi_reg(i) <= EXT_AXI_wdata_v;
                     end if;
@@ -2702,13 +2809,13 @@ begin
     acq_rst_hold_term_count <= axi_reg(69)(31 downto 0);
 --      := x"00080000"; -- 40 @ 40MHz @ 200MHz
 
-      delay_count             <= axi_reg(78)(19 downto 0);
-
 
 --    axi_reg( 66)( 31 downto 0)        <= DS2411_low( 31 downto 0);
 --    axi_reg( 67)( 31 downto 0)        <= DS2411_high( 31 downto 0);
 
 
+    ext_trigger_sim <= axi_reg(78)(15 downto 0);
+    reading_fin_flag <= axi_reg(76)(0);
 -- connect to _ID inputs
 --    DETECTOR_ID <=  DETECTOR_ID_7 & DETECTOR_ID_6 & DETECTOR_ID_5 & DETECTOR_ID_4 & 
 --                    DETECTOR_ID_3 & DETECTOR_ID_2 & DETECTOR_ID_1 & DETECTOR_ID_0;

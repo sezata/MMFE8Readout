@@ -88,8 +88,8 @@ entity vmm_cfg is
 
       LEDx  : out std_logic_vector(2 downto 0);
       testX : in  std_logic;
-
-      axi_reg : in array_80x32bit;      --axi config data
+--nathan changed type to 81
+      axi_reg : in array_81x32bit;      --axi config data
 
       vmm_cfg_sel : in std_logic_vector(31 downto 0);
 
@@ -118,7 +118,10 @@ entity vmm_cfg is
 --    vmm_acq_rst_running         : out std_logic_vector( 7 downto 0);
 --    acq_rst_term_count          : out array_8x32bit;
       dt_state             : out array_8x4bit;
-      acq_rst_counter      : out array_8x32bit
+      acq_rst_counter      : out array_8x32bit;
+
+      acq_rst_from_ext_trig : in std_logic;
+      fifo_rst_from_ext_trig : in std_logic
       );
 
 end vmm_cfg;
@@ -209,7 +212,10 @@ architecture rtl of vmm_cfg is
         acq_rst_term_count      : in  std_logic_vector(31 downto 0);
         acq_rst_hold_term_count : in  std_logic_vector(31 downto 0);
         dt_state_o              : out std_logic_vector(3 downto 0)  := (others => '0');
-        acq_rst_counter_o       : out std_logic_vector(31 downto 0) := (others => '0')
+        acq_rst_counter_o       : out std_logic_vector(31 downto 0) := (others => '0');
+        fifo_rst_from_ext_trig  : in std_logic;
+--nathan added
+        mmfe_id_reg :in std_logic_vector(3 downto 0)
         );
 
   end component;
@@ -796,8 +802,10 @@ begin
       port map(
         clk     => vmm_clk_100,         -- main clock
         rst     => reset,               -- reset
-        acq_rst => acq_rst_from_vmm_fsm_vec(I) or acq_rst_from_data0(I),  -- input
-
+        acq_rst => acq_rst_from_vmm_fsm_vec(I) or acq_rst_from_ext_trig,  -- input
+        -- ann added ext_trig
+--        acq_rst => acq_rst_from_vmm_fsm_vec(I) or acq_rst_from_data0(I) or acq_rst_from_ext_trig,  -- input
+        -- REMOVED ACQ_RST_FROM_DATA0
         vmm_wen             => vmm_wen_acq_rst(I),     -- or with cfg sm
         vmm_ena             => vmm_ena_acq_rst(I),     -- or with cfg sm
         vmm_acq_rst_running => vmm_acq_rst_running(I)  -- will be anded with same from other while running sm
@@ -848,7 +856,11 @@ begin
         acq_rst_hold_term_count => acq_rst_hold_term_count,
 
         dt_state_o        => dt_state (I),
-        acq_rst_counter_o => acq_rst_counter(I)
+        acq_rst_counter_o => acq_rst_counter(I),
+        fifo_rst_from_ext_trig => fifo_rst_from_ext_trig,
+        --nathan
+        mmfe_id_reg => axi_reg(80)(3 downto 0)
+--        mmfe_id_reg => axi_reg(80)(3 downto 0)
 
         );            
   end generate GEN_DAQ;
@@ -909,7 +921,7 @@ begin
   
   fifo_round_robin_inst : fifo_round_robin
     port map (
-      rst         => reset,
+      rst         => reset or fifo_rst_from_ext_trig,
       wr_clk      => vmm_clk_200,
       rd_clk      => EXT_AXI_CLK,  --vmm_clk_200, --nathan
       din         => din,
