@@ -1616,45 +1616,51 @@ begin
     begin
       if rising_edge(clk_40) then
         if ext_trigger_in_sel = '1' then
---            ext_trigger_sim <= '1';     -- getting trigger stuff
---            ext_trigger_in_sw <= ext_trigger_in;
           if unsigned(ext_trigger_sim) > 0 then
             ext_trigger_flag <= '1';
           else
             ext_trigger_flag <= '0';
           end if;
         else
---          ext_trigger_sim <= '0';
---            ext_trigger_in_sw <= clk_ets_out;
           ext_trigger_flag <= '0';
         end if;
       end if;
     end process ext_trigger_sel;
 
+    --TRIGGER MODULE FOR ACTUAL TRIGGER INPUT
+    --currently untested as of 3/8
+    
+    --ext_trigger_sel : process (ext_trigger_in_sel, clk_40)
+    --begin
+    --  if rising_edge(clk_40) then
+    --    if ext_trigger_in_sel = '1' then --external trigger module on from GUI
+    --        ext_trigger_flag <= ext_trigger_in;
+    --    else
+    --      ext_trigger_flag <= '0'; --to be safe
+    --    end if;
+    --end process ext_trigger_sel;
+
+    
 --   debounce it 
 --   i took the code from the template (coding examples, misc, debounce circuit) 
 --   here is the debounce circuit for the external_trigger_in
     process(clk_200)
     begin
-        if (clk_200'event and clk_200 = '1') then
-            if (reset = '1') then
-                Q1 <= '0';
-                Q2 <= '0';
-                Q3 <= '0';
-            else
-                Q1 <= ext_trigger_flag;
---                Q1 <= ext_trigger_in;
-                Q2 <= Q1;
-                Q3 <= Q2;
-            end if;
+      if (clk_200'event and clk_200 = '1') then
+        if (reset = '1') then
+          Q1 <= '0';
+          Q2 <= '0';
+          Q3 <= '0';
+        else
+          Q1 <= ext_trigger_flag;
+          Q2 <= Q1;
+          Q3 <= Q2;
         end if;
+      end if;
     end process;
 
     ext_trigger_deb <= Q1 and Q2 and Q3;
-
---    vmm_ckbc_en <= not(busy_from_ext_trigger or busy_from_acq_rst);  
-
-    --should include busy from just resetting the BCID counter
+    --feeds into external trigger module
     
 -----------------------------------
 --External Trigger Implementation  
