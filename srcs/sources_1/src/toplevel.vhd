@@ -754,10 +754,11 @@ architecture STRUCTURE of toplevel is
 --    signal clk_tp_period_cnt    : std_logic_vector(15 downto 0) := x"3E80";
 --    signal clk_tp_dutycycle_cnt : std_logic_vector(15 downto 0) := x"0200";
     -- ann changed these test pulse periods
-    signal clk_tp_period_cnt    : std_logic_vector(19 downto 0) := x"03E80";
+    signal clk_tp_period_cnt    : std_logic_vector(19 downto 0) := x"007D0";--20 us
+
 --    signal clk_tp_period_cnt    : std_logic_vector(19 downto 0) := x"F4240";
 --1 kHz
-    signal clk_tp_dutycycle_cnt : std_logic_vector(19 downto 0) := x"00200";
+    signal clk_tp_dutycycle_cnt : std_logic_vector(19 downto 0) := x"003E8";--10 us
 --    signal clk_tp_dutycycle_cnt : std_logic_vector(19 downto 0) := x"61A80";
     -- 400 microseconds
 
@@ -1467,8 +1468,9 @@ begin
                 
 --                if(((busy_from_ext_trigger = '1') and (int_trig = '0'))
 --                   or ((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1'))))    then  -- vmm_cktp_en currently hardwired to '1'
-                if((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1')))    then  -- vmm_cktp_en currently hardwired to '1'
-      --                if( int_trig = '1')  then  -- test
+                if ((unsigned(ext_trigger_sim) > 0) and (ext_trigger_in_sel = '1') and (vmm_cktp_en = '1') and (cktp_done = '0'))
+                or ((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1')))    then
+                  --if((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1')))    then  -- vmm_cktp_en currently hardwired to '1'
                     if clk_tp_cntr = clk_tp_period_cnt then
                         clk_tp_cntr <= (others => '0');
                         clk_tp_out  <= '1';
@@ -1616,51 +1618,47 @@ begin
     begin
       if rising_edge(clk_40) then
         if ext_trigger_in_sel = '1' then
-          if unsigned(ext_trigger_sim) > 0 then
+--            ext_trigger_sim <= '1';     -- getting trigger stuff
+--            ext_trigger_in_sw <= ext_trigger_in;
+          if unsigned(ext_trigger_sim) > 0 and cktp_done = '1' then
             ext_trigger_flag <= '1';
           else
             ext_trigger_flag <= '0';
           end if;
         else
+--          ext_trigger_sim <= '0';
+--            ext_trigger_in_sw <= clk_ets_out;
           ext_trigger_flag <= '0';
         end if;
       end if;
     end process ext_trigger_sel;
 
-    --TRIGGER MODULE FOR ACTUAL TRIGGER INPUT
-    --currently untested as of 3/8
-    
-    --ext_trigger_sel : process (ext_trigger_in_sel, clk_40)
-    --begin
-    --  if rising_edge(clk_40) then
-    --    if ext_trigger_in_sel = '1' then --external trigger module on from GUI
-    --        ext_trigger_flag <= ext_trigger_in;
-    --    else
-    --      ext_trigger_flag <= '0'; --to be safe
-    --    end if;
-    --end process ext_trigger_sel;
-
-    
 --   debounce it 
 --   i took the code from the template (coding examples, misc, debounce circuit) 
 --   here is the debounce circuit for the external_trigger_in
     process(clk_200)
     begin
-      if (clk_200'event and clk_200 = '1') then
-        if (reset = '1') then
-          Q1 <= '0';
-          Q2 <= '0';
-          Q3 <= '0';
-        else
-          Q1 <= ext_trigger_flag;
-          Q2 <= Q1;
-          Q3 <= Q2;
+        if (clk_200'event and clk_200 = '1') then
+            if (reset = '1') then
+                Q1 <= '0';
+                Q2 <= '0';
+                Q3 <= '0';
+            else
+--            elsif cktp_done = '1' then
+              
+                Q1 <= ext_trigger_flag;
+--                Q1 <= ext_trigger_in;
+                Q2 <= Q1;
+                Q3 <= Q2;
+            end if;
         end if;
-      end if;
     end process;
 
     ext_trigger_deb <= Q1 and Q2 and Q3;
-    --feeds into external trigger module
+
+--    vmm_ckbc_en <= not(busy_from_ext_trigger or busy_from_acq_rst);  
+
+    --should include busy from just resetting the BCID counter
     
 -----------------------------------
 --External Trigger Implementation  
