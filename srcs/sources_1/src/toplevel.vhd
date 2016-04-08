@@ -484,6 +484,8 @@ architecture STRUCTURE of toplevel is
 
                 clk100      : in std_logic;
                 vmm_clk_100 : in std_logic;
+                clk10 : std_logic;
+                vmm_clk_10 : in std_logic;
 
                 reset : in std_logic;
 
@@ -976,20 +978,23 @@ architecture STRUCTURE of toplevel is
 
 
     -- external trigger signals
-    signal ext_trigger_in  : std_logic;
+    signal ext_trigger_port  : std_logic;
     signal ext_trigger_en  : std_logic;
     signal ext_trigger_flag: std_logic;
-    signal ext_trigger_sim : std_logic_vector(15 downto 0);  --ann
+    signal ext_trigger_sim : std_logic;  --ann
+    signal ext_trigger_d : std_logic := '0';  --ann
+    signal ext_trigger_edge : std_logic;  --ann
     signal reading_fin_flag : std_logic;  --ann
     signal reading_fin_flag_d : std_logic;  --ann
     signal reading_fin_flag_edge : std_logic;  --ann
+    signal ext_trig_w_pulse : std_logic;
     signal ext_trigger_deb : std_logic;
     signal turn_captured   : std_logic_vector (15 downto 0);
     signal Q1, Q2, Q3      : std_logic;
     signal data_fifo_rd_en : std_logic;
     signal data_fifo_dout  : std_logic_vector(31 downto 0);
     signal data_fifo_empty : std_logic;
-
+    signal ext_trigger_delayed : std_logic;
 
 
     -- vmm signals
@@ -1458,19 +1463,15 @@ begin
     U_cktp_gen : process(clk_100, reset)
     begin
         if rising_edge(clk_100) then
-            if (int_trig_edge = '1' or  reset = '1') then
-            --if reset = '1' then reset = '1'
+            if (int_trig_edge = '1' or  reset = '1' or ext_trigger_edge= '1') then
+--            if (int_trig_edge = '1' or  reset = '1') then
                 clk_tp_cntr <= clk_tp_period_cnt;
                 clk_tp_out  <= '0';
                 cktp_done   <= '0';
             else
-
-                
---                if(((busy_from_ext_trigger = '1') and (int_trig = '0'))
---                   or ((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1'))))    then  -- vmm_cktp_en currently hardwired to '1'
-                if ((unsigned(ext_trigger_sim) > 0) and (ext_trigger_in_sel = '1') and (vmm_cktp_en = '1') and (cktp_done = '0'))
+                if ((ext_trigger_sim = '1') and (ext_trigger_in_sel = '1') and (vmm_cktp_en = '1') and (cktp_done = '0') and (ext_trig_w_pulse = '1'))
+--                if ((unsigned(ext_trigger_sim) > 0) and (ext_trigger_in_sel = '1') and (vmm_cktp_en = '1') and (cktp_done = '0'))
                 or ((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1')))    then
-                  --if((int_trig = '1') and ((cktp_done = '0') and (vmm_cktp_en = '1')))    then  -- vmm_cktp_en currently hardwired to '1'
                     if clk_tp_cntr = clk_tp_period_cnt then
                         clk_tp_cntr <= (others => '0');
                         clk_tp_out  <= '1';
@@ -1485,9 +1486,14 @@ begin
                 if pulses = x"03e7" then  -- x"03e7" <=> 999 
                     cktp_done <= '0';
                 else
-                    if counter_for_cktp_done = pulses then
-                        cktp_done <= '1';
+                  if ext_trigger_in_sel = '1' then
+                    if counter_for_cktp_done = x"0001" then
+                      cktp_done <= '1';
+                      clk_tp_out <= '0';
                     end if;
+                  elsif counter_for_cktp_done = pulses then
+                    cktp_done <= '1';
+                  end if;
                 end if;
             end if;
         end if;
@@ -1495,11 +1501,11 @@ begin
 
     U_cktp_done : process (clk_tp_out, reset)
     begin
-        if (int_trig_edge = '1' or  reset = '1') then
+        if (int_trig_edge = '1' or  reset = '1' or ext_trigger_edge = '1') then
         --if reset = '1' then
             counter_for_cktp_done <= (others => '0');
         else
-            if rising_edge(clk_tp_out) then
+            if falling_edge(clk_tp_out) then  -- changed from rising-edge
                 counter_for_cktp_done <= counter_for_cktp_done + '1';
             end if;
         end if;
@@ -1600,7 +1606,7 @@ begin
 
 --  input for external trigger 
 --    ibuf_inst_1 : IBUF port map (O => ext_trigger_in, I => EXTERNAL_TRIGGER_HDMI);
-    ibuf_inst_1 : IBUFDS port map (O => ext_trigger_in, I => EXTERNAL_TRIGGER_HDMI_P, IB => EXTERNAL_TRIGGER_HDMI_N);
+    ibuf_inst_1 : IBUFDS port map (O => ext_trigger_port, I => EXTERNAL_TRIGGER_HDMI_P, IB => EXTERNAL_TRIGGER_HDMI_N);
 
     reading_fin_edge_detect : process(clk_50, reading_fin_flag, reading_fin_flag_d)
     begin
@@ -1611,6 +1617,15 @@ begin
       reading_fin_flag_edge <= ((not reading_fin_flag_d) and reading_fin_flag);
     end process reading_fin_edge_detect;
 
+    ext_trig_edge_detect : process(clk_100, ext_trigger_sim, ext_trigger_d)
+    begin
+    --rising edge detect
+      if rising_edge(clk_100) then
+        ext_trigger_d <= ext_trigger_sim;
+      end if;
+      ext_trigger_edge <= (not(ext_trigger_d) and ext_trigger_sim);
+    end process ext_trig_edge_detect;
+
 
     
 -- simulated input
@@ -1618,12 +1633,13 @@ begin
     begin
       if rising_edge(clk_40) then
         if ext_trigger_in_sel = '1' then
---            ext_trigger_sim <= '1';     -- getting trigger stuff
---            ext_trigger_in_sw <= ext_trigger_in;
-          if unsigned(ext_trigger_sim) > 0 and cktp_done = '1' then
+--          if ext_trigger_sim = '1' then
+          if ext_trigger_sim = '1' and cktp_done = '1' then
             ext_trigger_flag <= '1';
+            ext_trigger_delayed <= ext_trigger_flag;
           else
             ext_trigger_flag <= '0';
+            ext_trigger_delayed <= '0';
           end if;
         else
 --          ext_trigger_sim <= '0';
@@ -1646,8 +1662,9 @@ begin
             else
 --            elsif cktp_done = '1' then
               
-                Q1 <= ext_trigger_flag;
---                Q1 <= ext_trigger_in;
+--                Q1 <= ext_trigger_flag;
+                Q1 <= ext_trigger_delayed;
+--                Q1 <= ext_trigger_port;
                 Q2 <= Q1;
                 Q3 <= Q2;
             end if;
@@ -1797,6 +1814,8 @@ begin
             EXT_AXI_CLK => EXT_AXI_CLK,
             clk100      => clk_100 ,    -- 100MHz
             vmm_clk_100 => clk_100 ,
+            clk10 => clk_10 ,
+            vmm_clk_10 => clk_10 ,
 
             reset => reset,
 
@@ -2428,7 +2447,7 @@ begin
             vmm_ckdt        => vmm_ckdt,
             vmm_ckdt_en_vec => vmm_ckdt_en_vec,
 
-            ext_trigger_in        => ext_trigger_in,
+            ext_trigger_in        => ext_trigger_port,
             ext_trigger_deb       => ext_trigger_deb,
             ext_trigger_pulse     => ext_trigger_pulse,
             busy_from_ext_trigger => busy_from_ext_trigger,
@@ -2818,8 +2837,9 @@ begin
 --    axi_reg( 67)( 31 downto 0)        <= DS2411_high( 31 downto 0);
 
 
-    ext_trigger_sim <= axi_reg(78)(15 downto 0);
+    ext_trigger_sim <= axi_reg(78)(0);
     reading_fin_flag <= axi_reg(76)(0);
+    ext_trig_w_pulse <= axi_reg(75)(0);  --option to send pulse with ext_trig
 -- connect to _ID inputs
 --    DETECTOR_ID <=  DETECTOR_ID_7 & DETECTOR_ID_6 & DETECTOR_ID_5 & DETECTOR_ID_4 & 
 --                    DETECTOR_ID_3 & DETECTOR_ID_2 & DETECTOR_ID_1 & DETECTOR_ID_0;

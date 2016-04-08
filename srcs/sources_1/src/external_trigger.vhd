@@ -191,12 +191,12 @@ begin
           busy_from_acq_rst    <= '0';
           fifo_rst             <= '0';
           vmm_cktk_ext_trig_en <= '1';
-          bcid_counter         <= bcid_counter + '1';
+--          bcid_counter         <= bcid_counter + '1';
         elsif acq_rst_from_ext_trig = '0' and (busy = '1') and (reading_fin = '1') and (read_data = '0') then
           busy  <= '0';
-          fifo_rst             <= '0'; --maybe take this out
+          fifo_rst             <= '0';  --maybe take this out
           vmm_cktk_ext_trig_en <= '1';
-          bcid_counter         <= bcid_counter + '1';
+--          bcid_counter         <= bcid_counter + '1';
         elsif (bcid_counter = x"fff" and busy = '0' and ext_trigger_in = '0') then  
           --so if 4095 and also not busy from an external trigger
           acq_rst_from_ext_trig <= '1';        --acquistion reset every 4096
@@ -214,8 +214,8 @@ begin
             -- generate a trigger pulse and busy
             trigger_pulse         <= '1';
             busy                  <= '1';
-            fifo_rst              <= '0';
             trigger_was_low       <= '0';
+            fifo_rst              <= '0';
             bcid_captured         <= bcid_counter;
             turn_counter_captured <= turn_counter;
             num_ext_trig          <= num_ext_trig + '1';  --ann
